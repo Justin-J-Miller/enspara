@@ -50,7 +50,8 @@ class KMedoids(BaseEstimator, ClusterMixin, util.MolecularClusterMixin):
     """
 
     def __init__(
-            self, metric, n_clusters=None, n_iters=5, args=None, lengths=None):
+            self, metric, n_clusters=None, n_iters=5, args=None, 
+            lengths=None, tolerance=None):
         
         self.metric = util._get_distance_method(metric)
 
@@ -58,9 +59,10 @@ class KMedoids(BaseEstimator, ClusterMixin, util.MolecularClusterMixin):
         self.n_iters = n_iters
         self.args = args
         self.lengths = lengths
+        self.tolerance = tolerance
 
     def fit(self, X, assignments=None, distances=None,
-            cluster_center_inds=None, X_lengths=None, args=None):
+            cluster_center_inds=None, X_lengths=None, args=None, tolerance=None):
         """Takes trajectories, X, and performs KMedoids clustering.
         Automatically determines whether or not to use the MPI version of this
         algorithm. Can start from scratch or perform a warm start using inital
@@ -99,7 +101,7 @@ class KMedoids(BaseEstimator, ClusterMixin, util.MolecularClusterMixin):
             assignments=assignments,
             distances=distances,
             cluster_center_inds=cluster_center_inds,
-            X_lengths=X_lengths, args=args)
+            X_lengths=X_lengths, args=self.args, tolerance=self.tolerance)
 
         self.runtime_ = time.perf_counter() - t0
         return self
@@ -107,7 +109,8 @@ class KMedoids(BaseEstimator, ClusterMixin, util.MolecularClusterMixin):
 
 def kmedoids(X, distance_method, n_clusters=None, n_iters=5, assignments=None,
              distances=None, cluster_center_inds=None, proposals=None,
-             X_lengths=None, args=None, lengths=None, random_state=None):
+             X_lengths=None, args=None, lengths=None, random_state=None,
+             tolerance=None):
     """K-Medoids clustering.
 
     K-Medoids is a clustering algorithm similar to the k-means algorithm
@@ -145,6 +148,8 @@ def kmedoids(X, distance_method, n_clusters=None, n_iters=5, assignments=None,
         not just the data on a single MPI rank.
     random_state : int, default=None
         Random state to fix RNG with.
+    tolerance : float, default=None
+        % of accepted Medoids moves below which stop clustering.
 
     Returns
     -------
@@ -199,7 +204,7 @@ def kmedoids(X, distance_method, n_clusters=None, n_iters=5, assignments=None,
     return _kmedoids_iterations(
                X, distance_method, n_iters, cluster_center_inds,
                assignments, distances, proposals=proposals, args=args, lengths=lengths,
-               random_state=random_state)
+               random_state=random_state, tolerance=tolerance)
 
 def _kmedoids_inputs_tree_mpi(X, distance_method, n_clusters, assignments,
                               distances, cluster_center_inds, X_lengths,
@@ -410,7 +415,7 @@ def ctr_ids_mpi(cluster_center_inds, lengths):
 def _kmedoids_iterations(
         X, distance_method, n_iters, cluster_center_inds,
         assignments, distances, proposals=None, args=None, 
-        lengths=None, random_state=None):
+        lengths=None, random_state=None, tolerance=None):
     """Inner loop performing kmedoids updates.
 
     Parameters
@@ -437,6 +442,8 @@ def _kmedoids_iterations(
         center (rather than choosing randomly).
     random_state : int, default = None
         Random state to fix RNG with.
+    tolerance : float, default = None
+        % acceptance rate at which to stop doing Kmedoids updates.
 
     Returns
     -------
@@ -446,7 +453,7 @@ def _kmedoids_iterations(
     """
 
     for i in range(n_iters):
-        cluster_center_inds, distances, assignments, centers = \
+        cluster_center_inds, distances, assignments, centers, acceptance_rate = \
             _kmedoids_pam_update(X, distance_method, cluster_center_inds,
                                  assignments, distances, proposals=proposals,
                                  random_state=random_state)
@@ -472,6 +479,10 @@ def _kmedoids_iterations(
                 util.write_assignments_and_distances_with_reassign(int_result, args, 
                     intermediate_n=f'kmedoids-{i}')
         logger.info("KMedoids update %s", i)
+        if tolerance != None and acceptance_rate < tolerance:
+            logger.info("Exiting Kmedoids early, accepted moves = "
+                f"{np.round(acceptance_rate,3)}% and tolerance set to {tolerance}%.")
+            return result
 
     return result
 
@@ -693,7 +704,9 @@ def _kmedoids_pam_update(
                 "Rejected proposed center for k=%s: cost %.5f -> %.5f).",
                 cid, old_cost, new_cost)
 
-    logger.info("Kmedoid sweep reduced cost to %.7f (%.2f%% acceptance)",
-                min(old_cost, new_cost), acceptances / len(medoid_inds) * 100)
+    acceptance_rate = acceptances / len(medoid_inds) * 100
 
-    return medoid_inds, distances, assignments, medoid_coords
+    logger.info("Kmedoid sweep reduced cost to %.7f (%.2f%% acceptance)",
+                min(old_cost, new_cost), acceptance_rate)
+
+    return medoid_inds, distances, assignments, medoid_coords, acceptance_rate

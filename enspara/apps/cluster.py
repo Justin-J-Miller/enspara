@@ -149,6 +149,10 @@ def process_command_line(argv):
         '--subsample', default=1, type=int,
         help="Take only every nth frame when loading trajectories. "
              "1 implies no subsampling.")
+    cluster_args.add_argument(
+        '--tolerance', default=None, type=float,
+        help="End Kmedoids clustering early if tolerance (percent accepted moves)"
+            " is reached.")
 
     # OUTPUT
     output_args = parser.add_argument_group("Output Settings")
@@ -296,8 +300,10 @@ def main(argv=None):
     if args.cluster_iterations is not None:
         if args.Clusterer is KHybrid:
             kwargs['kmedoids_updates'] = int(args.cluster_iterations)
+            kwargs['tolerance'] = args.tolerance
         elif args.Clusterer is KMedoids:
             kwargs['n_iters'] = int(args.cluster_iterations)
+            kwargs['tolerance'] = args.tolerance
         if args.Clusterer is not KCenters:
             kwargs['args']=args
             kwargs['lengths']=lengths

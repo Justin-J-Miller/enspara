@@ -158,7 +158,7 @@ class TestTrajClustering(unittest.TestCase):
         assignments_x = copy.deepcopy(assignments)
         distances_x = copy.deepcopy(distances)
 
-        cluster_center_inds2, distances2, assignments2, centers2 = \
+        cluster_center_inds2, distances2, assignments2, centers2, _ = \
             kmedoids._kmedoids_pam_update(self.trj, distance_method, 
                                  cluster_center_inds, assignments,
                                  distances, proposals=proposals, random_state=0)
@@ -402,7 +402,7 @@ def test_kmedoids_update_mpi_mdtraj():
         random_state=0
     )
 
-    local_ctr_inds, local_distances, local_assignments, centers = r
+    local_ctr_inds, local_distances, local_assignments, centers, _ = r
 
     mpi_ctr_inds = [(i*mpi.size())+r for r, i in local_ctr_inds]
 
@@ -446,7 +446,7 @@ def test_kmedoids_update_mpi_numpy():
         proposals=proposals,
         random_state=0)
 
-    local_ctr_inds, local_distances, local_assignments, centers = r
+    local_ctr_inds, local_distances, local_assignments, centers, _ = r
     mpi_ctr_inds = [(i*mpi.size())+r for r, i in local_ctr_inds]
 
     assert_array_equal(
@@ -484,7 +484,7 @@ def test_kmedoids_update_mpi_numpy_separated_blobs():
         random_state=0,
     )
 
-    local_ctr_inds, local_distances, local_assignments, centers = r
+    local_ctr_inds, local_distances, local_assignments, centers, _ = r
 
     assignments = np.concatenate(mpi.comm.allgather(local_assignments))
     distances = np.concatenate(mpi.comm.allgather(local_distances))
@@ -515,7 +515,7 @@ def test_kmedoids_pam_update_numpy():
     assig = r.assignments
     dists = r.distances
 
-    ind, dists, assig, _ = kmedoids._kmedoids_pam_update(
+    ind, dists, assig, _, _ = kmedoids._kmedoids_pam_update(
         X, DIST_FUNC, ind, assig, dists, random_state=0)
 
     assert_array_equal(ind, [0, 7, 17])
@@ -539,7 +539,7 @@ def test_kmedoids_pam_update_mdtraj():
     assig = r.assignments
     dists = r.distances
 
-    ind, dists, assig, _ = kmedoids._kmedoids_pam_update(
+    ind, dists, assig, _, _ = kmedoids._kmedoids_pam_update(
         X, DIST_FUNC, ind, assig, dists, random_state=0)
 
     assert_array_equal(ind, [298, 44, 341])
