@@ -26,6 +26,40 @@ def FRET_rate(r, R0, Td):
     """
     return((1/Td)*((R0/r)**6))
 
+def add_background(photons, interphoton_times, background_rate, photon_id):
+    """
+    Flips photons randomly to donor/acceptor photons according to background rate:
+
+    Attributes
+    --------------    
+    photons : ragged array (n_bursts, n_photons)
+        Photon identities from sample_lifetimes_guarenteed_photon()
+
+    interphoton_times : ragged array (n_bursts, n_photons),
+        Interphoton times in us
+
+    background_rate : Int, default None
+        Background rate of photons for either donor or acceptor channel
+
+    photon_id : 0 or 1, default None
+        Photon identity for background rate, 0 for donor, 1 for acceptor
+
+
+    Returns
+    ---------------
+    photons : ragged array, shape (n_bursts, n_photons)
+        Altered photons
+    """
+    background_rate /= (1000*1000) #uHz
+    for i, times in enumerate(interphoton_times):
+        prob_of_background = 1 - np.exp(-background_rate * np.array(times))
+        photons[i][np.random.rand(len(prob_of_background)) < prob_of_background] = photon_id
+
+    return(photons)
+
+
+
+
 def calc_dye_radiative_rates(Qd, Td):
     """
     Calculates rate of radiative/non_radiative energy transfer given:
@@ -700,7 +734,7 @@ def remake_msms(resSeq, prot_tcounts, dye_dir, dyenames, orig_eqs, outdir):
                                                 resSeq, dyenames, outdir= f'{outdir}/MSMs', prot_eqs = orig_eqs)
 
 def run_mc(resSeq, prot_tcounts, dyenames, MSM_frames, dye_dir, outdir, time_correction, 
-    save_photon_trjs=False, save_burst_frames=False):
+    save_photon_trjs=False, save_burst_frames=False, d_background=None, a_background=None, ipts=None):
     import os
     
     lifetime_outcomes_path = f'{dye_dir}/events-{resSeq[0]}-{resSeq[1]}.npy'
@@ -724,6 +758,15 @@ def run_mc(resSeq, prot_tcounts, dyenames, MSM_frames, dye_dir, outdir, time_cor
     if save_burst_frames:
         os.makedirs(f'{outdir}/protein-trajs/', exist_ok=True)
         np.save(f'{outdir}/protein-trajs/{resSeq[0]}-{resSeq[1]}-{time_correction}.npy', sampling[:,2])
+
+    #Optionally flip photon ids according to background rate
+    if d_background is not None and ipts is not None:
+        print(f'Adding donor background', flush=True)
+        sampling[:,1] = add_background(sampling[:,1], ipts, d_background, 0)
+
+    if a_background is not None and ipts is not None:
+        print(f'Adding acceptor background', flush=True)
+        sampling[:,1] = add_background(sampling[:,1], ipts, a_background, 1)
 
     print(f'Extracting FEs and lifetimes for {resSeq[0]}-{resSeq[1]} and time factor {time_correction}.', flush=True)
 
@@ -931,7 +974,7 @@ def extract_fret_efficiency_lifetimes(lifetime_samples):
     Returns
     -------------
     FEs : np.array, shape (n_bursts)
-        Average lifetime for each burst
+        Average FE for each burst
     d_lifetimes : np.array (n_bursts, variable)
         Lifetimes associated with each donor photon in a burst.
     a_lifetimes : np.array (n_bursts, variable)

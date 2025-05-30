@@ -150,13 +150,6 @@ def process_command_line(argv):
         help="Path to transition counts from the protein MSM. "
              "Should be of file type .npy.")
     burst_input_args.add_argument(
-        '--prot_centers', required=True,
-        help="Path to protein MSM cluster centers."
-        "Should be trajectory file readable by mdtraj.")
-    burst_input_args.add_argument(
-        '--prot_top', required=True,
-        help="Path to protein topology file.")
-    burst_input_args.add_argument(
         '--lifetimes_dir', action=readable_dir,
         help="Path to dye-lifetimes directory / output from calc_lifetimes.")
     burst_input_args.add_argument(
@@ -202,6 +195,13 @@ def process_command_line(argv):
     burst_parameters.add_argument(
         '--save_burst_frames', required=False, default=False, action='store_true',
         help='Save a npy file of the frames that make up each burst and the efficiency? T/F')
+    burst_parameters.add_argument(
+        '--d_background', required=False, type=int, default=None,
+        help="Background rate for donor. If supplied flips photons randomly to donor.")
+    burst_parameters.add_argument(
+        '--a_background', required=False, type=int, default=None,
+        help="Background rate for acceptor. If supplied flips photons randomly to acceptor.")
+
 
     args = parser.parse_args(argv[1:])
     return args
@@ -261,7 +261,6 @@ def main(argv=None):
 
     elif args.command == 'run_burst':
    		#Load in initial files
-        prot_traj=md.load(args.prot_top)
         prot_tcounts = np.load(args.t_counts, allow_pickle=True)
         prot_eqs = np.load(args.eq_probs)
  
@@ -320,7 +319,8 @@ def main(argv=None):
                dyenames=[args.donor_name, args.acceptor_name], 
                 dye_dir=args.lifetimes_dir,  MSM_frames=MSM_frames, 
                 outdir=args.output_dir, time_correction=time_correction, 
-                save_photon_trjs=args.save_photon_trjs, save_burst_frames=args.save_burst_frames)
+                save_photon_trjs=args.save_photon_trjs, save_burst_frames=args.save_burst_frames,
+                d_background=args.d_background, a_background=args.a_background, ipts=interphoton_times)
 
             with get_context("spawn").Pool(processes=procs) as pool:
                 run = pool.map(func, resSeqs)
