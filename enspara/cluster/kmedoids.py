@@ -443,7 +443,7 @@ def _kmedoids_iterations(
     random_state : int, default = None
         Random state to fix RNG with.
     tolerance : float, default = None
-        % acceptance rate at which to stop doing Kmedoids updates.
+        % improvement between sweeps at which to stop doing Kmedoids.
 
     Returns
     -------
@@ -453,7 +453,7 @@ def _kmedoids_iterations(
     """
 
     for i in range(n_iters):
-        cluster_center_inds, distances, assignments, centers, acceptance_rate = \
+        cluster_center_inds, distances, assignments, centers, improvement = \
             _kmedoids_pam_update(X, distance_method, cluster_center_inds,
                                  assignments, distances, proposals=proposals,
                                  random_state=random_state)
@@ -479,9 +479,9 @@ def _kmedoids_iterations(
                 util.write_assignments_and_distances_with_reassign(int_result, args, 
                     intermediate_n=f'kmedoids-{i}')
         logger.info("KMedoids update %s", i)
-        if tolerance != None and acceptance_rate < tolerance:
+        if tolerance != None and improvement < tolerance:
             logger.info("Exiting Kmedoids early, accepted moves = "
-                f"{np.round(acceptance_rate,3)}% and tolerance set to {tolerance}%.")
+                f"{np.round(improvement,3)}% and tolerance set to {tolerance}%.")
             return result
 
     return result
@@ -705,8 +705,14 @@ def _kmedoids_pam_update(
                 cid, old_cost, new_cost)
 
     acceptance_rate = acceptances / len(medoid_inds) * 100
+    print(f'Kmedoids sweep: old {old_cost}, new: {new_cost}')
+    improvement = 100 * (old_cost - new_cost) / old_cost
 
+    #Why is this min(old_cost, new_cost)? Seems that this is the cost for the
+    #Last center, not the cost of the overall?
     logger.info("Kmedoid sweep reduced cost to %.7f (%.2f%% acceptance)",
                 min(old_cost, new_cost), acceptance_rate)
 
-    return medoid_inds, distances, assignments, medoid_coords, acceptance_rate
+    logger.info(f"Kmedoid sweep improved cost by {np.round(improvement,3)}%")
+
+    return medoid_inds, distances, assignments, medoid_coords, improvement
